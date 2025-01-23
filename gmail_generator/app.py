@@ -6,12 +6,14 @@ import json
 from fake_useragent import FakeUserAgent
 
 from playwright.async_api import async_playwright, expect
-import logging
+from loguru import logger
 from unidecode import unidecode
 import random
 
 import utils
 import settings
+
+logger.add('logfile.log', format='{time} {level} {message}', level='INFO', rotation='10 KB', compression='zip')
 
 first_names = [
     "Adrien", "Agnès", "Alexandre", "Alice", "Amélie", "André", "Anne", "Antoine", "Arthur", "Aurore",
@@ -91,19 +93,26 @@ data = [full_gmail_username]  # --> poka chto tak, no tut cherez zapyatuyu budut
 
 
 async def data_to_csv():
-    with open('data.csv', 'w', newline='') as d:
-        writer = csv.writer(d)
-        writer.writerow(data)
+    try:
+        logger.info('Writing data to a CSV file.')
+        with open('data.csv', 'w', newline='') as d:
+            writer = csv.writer(d)
+            writer.writerow(data)
+            logger.info('Successfully added data to csv file.')
+    except Exception as err:
+        logger.info(f'Error while writing data to CSV file. Error message: {err}')
 
 
 async def fill_data():
     async with async_playwright() as p:
+        logger.info('Playwright launch.')
         if asyncio.iscoroutinefunction(utils.format_proxy):
             proxy = await utils.format_proxy(settings.PROXY)
         else:
             proxy = utils.format_proxy(settings.PROXY)
 
         if not proxy:
+            logger.info('Incorrect proxy format.')
             raise ValueError("Proxy is not correctly formatted or returned None")
 
         browser = await p.chromium.launch(
@@ -117,46 +126,58 @@ async def fill_data():
 
         context = await browser.new_context(user_agent=user_agent)
         page = await context.new_page()
+        logger.info('Playwright settings are OK.')
 
         try:
+            logger.info('Opening Google-Mail registration page.')
             await page.goto(
                 'https://accounts.google.com/signup/v2/createaccount?flowName=GlifWebSignIn&flowEntry=SignUp'
             )
 
+            logger.info('Filling name and surname fields.')
             await page.locator('#firstName').fill(gmail_first_name)
             await page.locator('#lastName').fill(gmail_last_name)
             await page.click('.VfPpkd-RLmnJb')
 
+            logger.info('Filling BDay fields.')
             await page.locator('#day').fill(birth_day)
             await page.locator('#month').select_option(birth_month)
             await page.locator('#year').fill(year_of_birth)
 
+            logger.info('Choosing gender option.')
             await page.locator('#gender').select_option(gender_title)
             await page.click('.VfPpkd-RLmnJb')
 
+            logger.info('Creating username.')
             await page.click('#selectionc3')
-
             await page.locator('//*[@id="yDmH0d"]/c-wiz/div/div[2]/div/div/div/form/span/section/div/div/div[2]/div[1]/div/div[1]/div/div[1]/input').fill(username)
             await page.click('.VfPpkd-RLmnJb')
 
+            logger.info('Creating password.')
             await page.locator('//*[@id="passwd"]/div[1]/div/div[1]/input').fill(password)
             await page.locator('//*[@id="confirm-passwd"]/div[1]/div/div[1]/input').fill(password)
             await page.click('.VfPpkd-RLmnJb')
 
+            logger.info('Exporting Cookies.')
             cookies = await context.cookies()
             cookies_json = json.dumps(cookies)
             data.append(cookies_json)
             await data_to_csv()
+            logger.info('Cookies exported successfully.')
 
+            # add here mobile phone registration
+
+            logger.info('Closing Browser')
             await browser.close()
 
         except Exception as err:
             print(f'Failed to create account: {err}')
 
-        time.sleep(9999999)
+        # time.sleep(9999999)
 
 
 if __name__ == '__main__':
+    logger.info('Starting Programme.')
     asyncio.run(fill_data())
     asyncio.run(data_to_csv())
-
+    logger.info('Programme finished.')
