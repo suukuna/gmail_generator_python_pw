@@ -156,5 +156,7 @@ async def fill_data():
         time.sleep(9999999)
 
 
+if __name__ == '__main__':
+    asyncio.run(fill_data())
     asyncio.run(data_to_csv())
 
